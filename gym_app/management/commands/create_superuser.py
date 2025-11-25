@@ -6,22 +6,13 @@ User = get_user_model()
 
 
 class Command(BaseCommand):
-    help = 'Create a superuser from environment variables'
+    help = 'Create a superuser from environment variables or default credentials'
 
     def handle(self, *args, **options):
-        # Get credentials from environment variables
-        username = config('SUPERUSER_USERNAME', default=None)
-        email = config('SUPERUSER_EMAIL', default=None)
-        password = config('SUPERUSER_PASSWORD', default=None)
-
-        if not username or not email or not password:
-            self.stdout.write(
-                self.style.WARNING(
-                    'Skipping superuser creation. Set SUPERUSER_USERNAME, '
-                    'SUPERUSER_EMAIL, and SUPERUSER_PASSWORD environment variables.'
-                )
-            )
-            return
+        # Get credentials from environment variables with defaults
+        username = config('SUPERUSER_USERNAME', default='admin')
+        email = config('SUPERUSER_EMAIL', default='admin@gym.com')
+        password = config('SUPERUSER_PASSWORD', default='admin')
 
         # Check if superuser already exists
         if User.objects.filter(username=username).exists():
@@ -32,13 +23,24 @@ class Command(BaseCommand):
 
         # Create superuser
         try:
-            User.objects.create_superuser(
+            user = User.objects.create_superuser(
                 username=username,
                 email=email,
-                password=password
+                password=password,
+                first_name='Admin',
+                last_name='User',
+                role='admin'
             )
             self.stdout.write(
-                self.style.SUCCESS(f'Successfully created superuser "{username}"')
+                self.style.SUCCESS(
+                    f'Successfully created superuser "{username}" with password "{password}"'
+                )
+            )
+            self.stdout.write(
+                self.style.WARNING(
+                    f'⚠️  Default credentials are being used! '
+                    f'Username: {username} | Password: {password}'
+                )
             )
         except Exception as e:
             self.stdout.write(

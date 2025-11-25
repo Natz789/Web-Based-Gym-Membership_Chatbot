@@ -1,0 +1,152 @@
+{% extends 'gym_app/base.html' %}
+
+{% block title %}Cancel Membership - Final Step - GymFit Pro{% endblock %}
+
+{% block content %}
+
+{% load static %}
+<link rel="stylesheet" href="{% static 'gym_app/css/pages/dashboard_member.css' %}">
+
+<div class="dashboard-header">
+    <h1><i class="fas fa-times-circle"></i> Cancel Membership - Final Step</h1>
+    <p>Please provide a reason for cancellation</p>
+</div>
+
+<div class="membership-card" style="border: 3px solid #dc3545; max-width: 800px; margin: 2rem auto;">
+    <div class="membership-header" style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);">
+        <div>
+            <h2 style="color: white; margin: 0;">
+                <i class="fas fa-edit"></i> Cancellation Reason
+            </h2>
+            <p style="color: rgba(255,255,255,0.9); margin: 0.5rem 0 0 0;">Help us improve by sharing why you're leaving</p>
+        </div>
+    </div>
+
+    <div style="padding: 2rem;">
+        <div style="background: #f8f9fa; padding: 1.5rem; border-radius: 10px; margin-bottom: 2rem;">
+            <h3 style="color: var(--primary-blue); margin: 0 0 1rem 0;">Membership Summary</h3>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                <div>
+                    <div style="color: var(--gray); font-size: 0.9rem;">Plan Name</div>
+                    <div style="font-weight: 600; color: var(--primary-blue);">{{ membership.plan.name }}</div>
+                </div>
+                <div>
+                    <div style="color: var(--gray); font-size: 0.9rem;">Days Remaining</div>
+                    <div style="font-weight: 600; color: #dc3545;">{{ membership.days_remaining }} days</div>
+                </div>
+                <div>
+                    <div style="color: var(--gray); font-size: 0.9rem;">Start Date</div>
+                    <div style="font-weight: 600;">{{ membership.start_date|date:"M d, Y" }}</div>
+                </div>
+                <div>
+                    <div style="color: var(--gray); font-size: 0.9rem;">End Date</div>
+                    <div style="font-weight: 600;">{{ membership.end_date|date:"M d, Y" }}</div>
+                </div>
+            </div>
+        </div>
+
+        <form method="POST" id="cancelForm">
+            {% csrf_token %}
+
+            <div class="form-group" style="margin-bottom: 1.5rem;">
+                <label for="reason" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: var(--primary-blue);">
+                    <i class="fas fa-comment"></i> Reason for Cancellation
+                </label>
+                <textarea
+                    name="reason"
+                    id="reason"
+                    rows="6"
+                    class="form-control"
+                    placeholder="Please tell us why you're cancelling (optional but appreciated)..."
+                    style="width: 100%;
+                           padding: 1rem;
+                           border: 2px solid #dee2e6;
+                           border-radius: 10px;
+                           font-size: 1rem;
+                           resize: vertical;
+                           font-family: inherit;"
+                ></textarea>
+                <small style="color: var(--gray); display: block; margin-top: 0.5rem;">
+                    Your feedback helps us improve our services
+                </small>
+            </div>
+
+            <div style="background: #fff3cd; padding: 1.5rem; border-radius: 10px; border-left: 4px solid #ffc107; margin-bottom: 1.5rem;">
+                <h4 style="color: #856404; margin: 0 0 0.5rem 0;">
+                    <i class="fas fa-exclamation-triangle"></i> Final Warning
+                </h4>
+                <p style="color: #856404; margin: 0;">
+                    By clicking "Confirm Cancellation", your membership will be immediately cancelled.
+                    You will lose access to all gym facilities and your remaining <strong>{{ membership.days_remaining }} days</strong> will not be refunded.
+                </p>
+            </div>
+
+            <div style="display: flex; gap: 1rem; justify-content: center;">
+                <a href="{% url 'dashboard' %}" class="btn btn-secondary" style="min-width: 180px;">
+                    <i class="fas fa-arrow-left"></i> Keep My Membership
+                </a>
+                <button type="submit" class="btn btn-danger" style="min-width: 180px;" onclick="return confirmCancel();">
+                    <i class="fas fa-check-circle"></i> Confirm Cancellation
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.form-control:focus {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-danger:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(220, 53, 69, 0.3);
+}
+
+.btn-secondary {
+    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
+}
+</style>
+
+<script>
+function confirmCancel() {
+    return confirm('Are you absolutely sure you want to cancel your membership? This action cannot be undone!');
+}
+</script>
+
+{% endblock %}

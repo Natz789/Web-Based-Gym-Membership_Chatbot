@@ -1,0 +1,115 @@
+{% extends 'gym_app/base.html' %}
+
+{% block title %}Cancel Membership - GymFit Pro{% endblock %}
+
+{% block content %}
+
+{% load static %}
+<link rel="stylesheet" href="{% static 'gym_app/css/pages/dashboard_member.css' %}">
+
+<div class="dashboard-header">
+    <h1><i class="fas fa-times-circle"></i> Cancel Membership</h1>
+    <p>Review your membership details before proceeding</p>
+</div>
+
+<div class="membership-card" style="border: 3px solid #dc3545; max-width: 800px; margin: 2rem auto;">
+    <div class="membership-header" style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);">
+        <div>
+            <h2 style="color: white; margin: 0;">
+                <i class="fas fa-exclamation-triangle"></i> Membership Cancellation
+            </h2>
+            <p style="color: rgba(255,255,255,0.9); margin: 0.5rem 0 0 0;">Are you sure you want to cancel this membership?</p>
+        </div>
+    </div>
+
+    <div class="membership-details">
+        <div class="detail-item">
+            <div class="detail-label">Plan Name</div>
+            <div class="detail-value"><strong>{{ membership.plan.name }}</strong></div>
+        </div>
+        <div class="detail-item">
+            <div class="detail-label">Start Date</div>
+            <div class="detail-value">{{ membership.start_date|date:"F d, Y" }}</div>
+        </div>
+        <div class="detail-item">
+            <div class="detail-label">End Date</div>
+            <div class="detail-value">{{ membership.end_date|date:"F d, Y" }}</div>
+        </div>
+        <div class="detail-item">
+            <div class="detail-label">Days Remaining</div>
+            <div class="detail-value"><strong>{{ membership.days_remaining }} days</strong></div>
+        </div>
+        <div class="detail-item">
+            <div class="detail-label">Status</div>
+            <div class="detail-value">
+                <span class="badge badge-active">{{ membership.status|upper }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div style="background: #fff3cd; padding: 1.5rem; margin: 1.5rem; border-radius: 10px; border-left: 4px solid #ffc107;">
+        <h3 style="color: #856404; margin: 0 0 1rem 0;">
+            <i class="fas fa-info-circle"></i> Important Information
+        </h3>
+        <ul style="color: #856404; margin: 0; padding-left: 1.5rem;">
+            <li>Your membership will be immediately cancelled upon confirmation</li>
+            <li>You will lose access to gym facilities after cancellation</li>
+            <li>Remaining days ({{ membership.days_remaining }} days) will not be refunded</li>
+            <li>You can purchase a new membership at any time</li>
+            <li>This action cannot be undone</li>
+        </ul>
+    </div>
+
+    <div style="padding: 1.5rem; display: flex; gap: 1rem; justify-content: center;">
+        <a href="{% url 'dashboard' %}" class="btn btn-secondary" style="min-width: 150px;">
+            <i class="fas fa-arrow-left"></i> Go Back
+        </a>
+        <a href="{% url 'cancel_membership' membership.id %}" class="btn btn-danger" style="min-width: 150px; background: #dc3545;">
+            <i class="fas fa-times-circle"></i> Proceed to Cancel
+        </a>
+    </div>
+</div>
+
+<style>
+.btn-danger {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-danger:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(220, 53, 69, 0.3);
+}
+
+.btn-secondary {
+    background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
+}
+</style>
+
+{% endblock %}

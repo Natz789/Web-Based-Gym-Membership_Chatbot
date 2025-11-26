@@ -177,7 +177,6 @@ If you don't know something specific, politely direct the user to contact the gy
         
         context += "\n\nGYM LOCATION & CONTACT:\n"
         context += "📍 Address: [Longos,Pulilan,Bulacan]\n"
-        context += "📍 City: Cabanatuan City, Central Luzon, Philippines\n"
         context += "📞 Phone: [0968552417]\n"
         context += "📧 Email: [rhosegym998@gmail.com]\n"
         context += "🕐 Operating Hours: [Mon-Sat 6AM-10PM, Sun 8AM-7PM]\n"

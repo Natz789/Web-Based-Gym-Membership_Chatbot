@@ -514,6 +514,125 @@ COMMON MISTAKES:
         cache.set(cache_key, knowledge, 3600)
         return knowledge
 
+    @staticmethod
+    def _is_gym_related(user_message):
+        """
+        Check if user query is related to gym, membership, fitness, or customer service.
+        Returns (is_related: bool, confidence: float)
+
+        Scope includes:
+        - Gym membership and plans
+        - Payment and transactions
+        - Gym facilities and equipment
+        - Fitness and workout advice
+        - Account and profile management
+        - Gym policies and hours
+        - Kiosk system
+        - Staff/admin operations
+
+        Out of scope:
+        - Making action figures
+        - Cooking recipes
+        - History lessons
+        - General knowledge unrelated to gym
+        """
+        message_lower = user_message.lower()
+
+        # GYM-RELATED KEYWORDS (Positive indicators)
+        gym_keywords = [
+            # Membership related
+            'membership', 'plan', 'subscribe', 'subscription', 'renew', 'renewal',
+            'expires', 'expiration', 'duration', 'days remaining',
+
+            # Payment related
+            'payment', 'pay', 'price', 'cost', 'gcash', 'cash', 'refund',
+            'invoice', 'receipt', 'transaction', 'charge',
+
+            # Account related
+            'account', 'profile', 'login', 'register', 'password', 'email',
+            'kiosk', 'pin', 'check in', 'check out', 'attendance',
+
+            # Fitness/workout related
+            'gym', 'fitness', 'workout', 'exercise', 'training', 'weight',
+            'muscle', 'cardio', 'strength', 'class', 'classes', 'trainer',
+            'equipment', 'machine', 'barbell', 'dumbbell', 'treadmill',
+            'nutrition', 'diet', 'protein', 'calories',
+
+            # Facility related
+            'facility', 'facilities', 'locker', 'shower', 'sauna',
+            'equipment', 'hours', 'location', 'address',
+
+            # Policy/general gym related
+            'policy', 'rule', 'etiquette', 'member', 'staff', 'admin',
+            'walk-in', 'pass', 'schedule', 'class schedule'
+        ]
+
+        # NON-GYM KEYWORDS (Negative indicators - strong out-of-scope signals)
+        non_gym_keywords = [
+            # Crafts and hobbies
+            'action figure', 'action figures', 'craft', 'diy', 'lego',
+            'model building', 'painting', 'drawing', 'sculpture',
+
+            # Cooking/Food
+            'recipe', 'cook', 'cooking', 'bake', 'baking', 'ingredient',
+            'cuisine', 'restaurant', 'dish', 'meal prep',
+
+            # History/Geography
+            'history', 'historical', 'war', 'ancient', 'civilization',
+            'geography', 'country', 'capital', 'continent',
+
+            # Technology (non-gym)
+            'code', 'programming', 'python', 'javascript', 'software',
+            'app development', 'website', 'html', 'css',
+
+            # Other unrelated topics
+            'movie', 'song', 'music', 'book', 'author',
+            'car', 'vehicle', 'travel', 'vacation', 'hotel',
+            'weather', 'climate', 'nature', 'animal',
+            'math problem', 'algebra', 'geometry',
+            'doctor', 'medicine', 'surgery', 'disease'
+        ]
+
+        # Count keyword matches
+        gym_count = sum(1 for kw in gym_keywords if kw in message_lower)
+        non_gym_count = sum(1 for kw in non_gym_keywords if kw in message_lower)
+
+        # If strong out-of-scope signals, reject immediately
+        if non_gym_count > 0:
+            return False, 0.0
+
+        # If gym keywords found, it's likely gym-related
+        if gym_count > 0:
+            return True, min(gym_count / 5.0, 1.0)  # Confidence increases with matches
+
+        # Check for contextual clues (pronouns + gym-related context)
+        contextual_gym_signals = [
+            'my membership', 'my plan', 'my account', 'my payment',
+            'my workout', 'my training', 'my attendance',
+            'how much', 'how many days', 'when does',
+            'can i', 'how do i', 'how to', 'help me'
+        ]
+
+        has_contextual_signal = any(signal in message_lower for signal in contextual_gym_signals)
+
+        # Very short messages or only pronouns/questions without context = likely out of scope
+        words = message_lower.split()
+        if len(words) < 3 and not has_contextual_signal:
+            return False, 0.0
+
+        # Generic questions without gym context = out of scope
+        # This catches things like "How to make an action figure?" "How to cook pasta?"
+        generic_patterns = [
+            'how to make', 'how to build', 'how to create',
+            'what is', "what's", 'who is', 'when was'
+        ]
+
+        if any(pattern in message_lower for pattern in generic_patterns) and gym_count == 0:
+            return False, 0.0
+
+        # Default: If we can't determine, ask for clarification (safe default)
+        return False, 0.0
+
     def chat(self, user_message):
         """
         Process user message with intent detection and intelligent routing
@@ -523,9 +642,41 @@ COMMON MISTAKES:
         """
         start_time = time.time()
 
+        # NEW: Check if query is gym-related FIRST (before expensive operations)
+        is_gym_related, scope_confidence = self._is_gym_related(user_message)
 
-        # OPTIMIZATION #1: Check FAQ database FIRST - instant response (<10ms)
-        # This should be done BEFORE any other processing
+        if not is_gym_related:
+            out_of_scope_response = """I appreciate your question, but that's outside my scope as a gym assistant! 🏋️
+
+I'm **Gym Fit Assistant** and I'm specifically designed to help with:
+✅ Gym memberships and plans
+✅ Payments and transactions
+✅ Fitness advice and workouts
+✅ Gym facilities and hours
+✅ Account management
+✅ Kiosk system help
+
+For questions about other topics, you might want to ask a general AI assistant.
+
+Is there anything gym-related I can help you with today? 💪"""
+
+            # Save to conversation history
+            self._save_message("user", user_message)
+            self._save_message("assistant", out_of_scope_response, 0)
+
+            # Log usage
+            self._log_chatbot_usage(user_message, out_of_scope_response, 'out_of_scope', time.time() - start_time)
+
+            return {
+                "success": True,
+                "response": out_of_scope_response,
+                "conversation_id": self.conversation.conversation_id if self.conversation else None,
+                "intent": "out_of_scope",
+                "handled_by": "scope_filter",
+                "response_time_ms": int((time.time() - start_time) * 1000)
+            }
+
+        # Continue with normal processing if query is gym-related
         from .chatbot_tools import FAQFastPath
         faq_answer, faq_score = FAQFastPath.find_faq_match(user_message)
         if faq_answer:

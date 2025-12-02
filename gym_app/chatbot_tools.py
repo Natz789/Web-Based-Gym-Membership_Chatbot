@@ -1134,6 +1134,19 @@ class ChatbotTools:
             if email and self.operations:
                 return self.get_member_details(email.group(0))
 
+        # ==================== RBAC: Own Information Queries ====================
+
+        # Own information queries (members, staff, admins can check their own info)
+        if QueryNormalizer.matches_any_variation(query, ['show me my', 'my information', 'my detail', 'my profile', 'my info', 'my account']):
+            return self.get_own_information()
+
+        # Membership duration queries for authenticated users
+        if QueryNormalizer.matches_any_variation(query, ['how long', 'days remaining', 'how many days', 'membership duration', 'expires when', 'when expire', 'how long until']):
+            if any(keyword in query_normalized for keyword in ['my', 'i have', 'i\'ve', 'expire', 'left']):
+                return self.get_my_membership_duration()
+
+        # ==================== RBAC: Staff Member Lookup ====================
+
         # Member search/lookup - expanded patterns with normalization
         # Using base forms (detail, info, member, etc.) - normalizer handles plural/singular
         member_lookup_keywords = [
@@ -1163,10 +1176,10 @@ class ChatbotTools:
         if is_member_lookup:
             # Try to extract member name or email
             if '@' in query:
-                # Email found
+                # Email found - use RBAC method for staff/admin lookup
                 email = re.search(r'[\w\.-]+@[\w\.-]+', query)
                 if email:
-                    return self.get_member_details(email.group(0))
+                    return self.get_member_info_by_email(email.group(0))
 
             # Try to extract name (words after keywords or possessive forms)
             # Handle possessive queries like "What's John Doe's info/details/information"
@@ -1178,7 +1191,7 @@ class ChatbotTools:
             if possessive_match:
                 name = possessive_match.group(1).strip()
                 if name:
-                    return self.get_member_details(name)
+                    return self.get_member_information_by_name(name)
 
             # Try to extract name after common keywords (using normalized forms)
             extraction_keywords = [
@@ -1222,7 +1235,7 @@ class ChatbotTools:
                         if cleaned_words:
                             name = ' '.join(cleaned_words[:4])  # Max 4 words for a name
                             if name and len(name) > 2:  # Avoid single letters
-                                return self.get_member_details(name)
+                                return self.get_member_information_by_name(name)
 
         # Generate PIN
         if 'generate pin' in query_lower or 'create pin' in query_lower:
@@ -1326,3 +1339,285 @@ class ChatbotTools:
                 'Registration process',
                 'General fitness advice'
             ]
+
+    # ==================== RBAC: User Information Retrieval ====================
+
+    def get_own_information(self):
+        """
+        Get authenticated user's own information
+        Available to: Members, Staff, Admins
+        """
+        if not self.user or not self.user.is_authenticated:
+            return "❌ Please log in to view your information."
+
+        try:
+            return self._format_user_info(self.user, is_own_info=True)
+        except Exception as e:
+            return f"Error retrieving your information: {str(e)}"
+
+    def get_my_membership_duration(self):
+        """
+        Get authenticated user's remaining membership duration
+        Available to: Members, Staff, Admins
+        """
+        if not self.user or not self.user.is_authenticated:
+            return "❌ Please log in to check your membership duration."
+
+        try:
+            from .models import UserMembership
+
+            active_membership = UserMembership.objects.filter(
+                user=self.user,
+                status='active'
+            ).first()
+
+            if not active_membership:
+                return f"📅 You don't have an active membership currently.\n\nVisit the Membership Plans page to subscribe."
+
+            days_remaining = active_membership.days_remaining()
+            end_date = active_membership.end_date.strftime('%B %d, %Y')
+
+            response = f"✅ **Your Membership Status**\n\n"
+            response += f"📅 **Days Remaining**: {days_remaining} days\n"
+            response += f"🔄 **Expires On**: {end_date}\n"
+            response += f"💳 **Plan**: {active_membership.plan.name}\n\n"
+
+            if days_remaining <= 7:
+                response += f"⚠️ Your membership is expiring soon! Consider renewing now.\n"
+            else:
+                response += f"✨ Your membership is in good standing.\n"
+
+            return response
+        except Exception as e:
+            return f"Error checking membership duration: {str(e)}"
+
+    def get_member_information_by_name(self, member_name):
+        """
+        Get member information by name (Staff/Admin lookup)
+        Available to: Staff and Admin only
+
+        Args:
+            member_name: Full name or partial name of member
+        """
+        if not self.user or not self.user.is_authenticated:
+            return "❌ Please log in to access this feature."
+
+        if not self.user.is_staff_or_admin():
+            return "❌ This feature requires staff or admin access."
+
+        try:
+            from .models import User
+            from django.db.models import Q
+
+            # Search for member
+            member = User.objects.filter(
+                role='member',
+                is_active=True
+            ).filter(
+                Q(first_name__icontains=member_name) |
+                Q(last_name__icontains=member_name) |
+                Q(username__icontains=member_name)
+            ).first()
+
+            if not member:
+                return f"❌ No active member found with name '{member_name}'. Please verify the name and try again."
+
+            # Log the lookup for audit trail
+            if self.operations:
+                self.operations._log_operation(
+                    action='data_export',
+                    description=f"Looked up member information for {member.get_full_name()} via chatbot",
+                    model_name='User',
+                    object_id=member.id,
+                    object_repr=str(member)
+                )
+
+            return self._format_member_info_for_staff(member)
+        except Exception as e:
+            return f"Error retrieving member information: {str(e)}"
+
+    def get_member_info_by_email(self, email):
+        """
+        Get member information by email (Staff/Admin lookup)
+        Available to: Staff and Admin only
+        """
+        if not self.user or not self.user.is_authenticated:
+            return "❌ Please log in to access this feature."
+
+        if not self.user.is_staff_or_admin():
+            return "❌ This feature requires staff or admin access."
+
+        try:
+            from .models import User
+
+            member = User.objects.filter(
+                email__iexact=email,
+                role='member',
+                is_active=True
+            ).first()
+
+            if not member:
+                return f"❌ No active member found with email '{email}'."
+
+            # Log the lookup
+            if self.operations:
+                self.operations._log_operation(
+                    action='data_export',
+                    description=f"Looked up member information by email for {member.get_full_name()} via chatbot",
+                    model_name='User',
+                    object_id=member.id,
+                    object_repr=str(member)
+                )
+
+            return self._format_member_info_for_staff(member)
+        except Exception as e:
+            return f"Error retrieving member information: {str(e)}"
+
+    # ==================== Formatting Methods ====================
+
+    def _format_user_info(self, user, is_own_info=False):
+        """
+        Format user information for display
+        Includes clickable links and formatted details
+        """
+        from .models import UserMembership
+
+        response = ""
+
+        if is_own_info:
+            response += "👤 **Your Information**\n\n"
+        else:
+            response += f"👤 **{user.get_full_name()}'s Information**\n\n"
+
+        # Personal Information
+        response += "📋 **Personal Details**\n"
+        response += f"• **Name**: {user.get_full_name()}\n"
+        response += f"• **Email**: {user.email}\n"
+        if user.mobile_no:
+            response += f"• **Phone**: {user.mobile_no}\n"
+        if user.address:
+            response += f"• **Address**: {user.address}\n"
+        if user.birthdate:
+            response += f"• **Birthday**: {user.birthdate.strftime('%B %d, %Y')}\n"
+        if user.age:
+            response += f"• **Age**: {user.age}\n"
+
+        response += f"\n"
+
+        # Membership Status
+        active_membership = UserMembership.objects.filter(
+            user=user,
+            status='active'
+        ).first()
+
+        response += "💳 **Membership Status**\n"
+
+        if active_membership:
+            days_remaining = active_membership.days_remaining()
+            response += f"✅ **Status**: Active\n"
+            response += f"📅 **Plan**: {active_membership.plan.name}\n"
+            response += f"⏳ **Days Remaining**: {days_remaining} days\n"
+            response += f"🔄 **Expires**: {active_membership.end_date.strftime('%B %d, %Y')}\n"
+            response += f"📍 **Started**: {active_membership.start_date.strftime('%B %d, %Y')}\n"
+        else:
+            response += f"❌ **Status**: No Active Membership\n"
+
+        response += f"\n"
+
+        # Account Information
+        response += "⚙️ **Account Information**\n"
+        response += f"• **Role**: {user.get_role_display()}\n"
+        response += f"• **Member Since**: {user.date_joined.strftime('%B %d, %Y')}\n"
+
+        if user.kiosk_pin:
+            response += f"• **Kiosk PIN**: `{user.kiosk_pin}`\n"
+
+        response += f"\n"
+
+        # Clickable Links (for web interface)
+        if is_own_info:
+            response += "🔗 **Quick Actions**\n"
+            response += "• View [Membership Plans](/plans/) - Browse available plans\n"
+            response += "• Go to [Dashboard](/dashboard/) - Your full account\n"
+            response += "• Check [Attendance History](/attendance/) - Your gym visits\n"
+
+        return response
+
+    def _format_member_info_for_staff(self, member):
+        """
+        Format member information for staff/admin view
+        Includes additional sensitive information and action links
+        """
+        from .models import UserMembership, Payment
+
+        response = f"👤 **Member Profile: {member.get_full_name()}**\n\n"
+
+        # Personal Information
+        response += "📋 **Personal Details**\n"
+        response += f"• **Name**: {member.get_full_name()}\n"
+        response += f"• **Email**: {member.email}\n"
+        response += f"• **Username**: {member.username}\n"
+        if member.mobile_no:
+            response += f"• **Phone**: {member.mobile_no}\n"
+        if member.address:
+            response += f"• **Address**: {member.address}\n"
+        if member.birthdate:
+            response += f"• **Birthday**: {member.birthdate.strftime('%B %d, %Y')}\n"
+            response += f"• **Age**: {member.age}\n"
+
+        response += f"\n"
+
+        # Membership Status
+        response += "💳 **Membership Status**\n"
+
+        active_membership = UserMembership.objects.filter(
+            user=member,
+            status='active'
+        ).first()
+
+        if active_membership:
+            days_remaining = active_membership.days_remaining()
+            response += f"✅ **Status**: Active\n"
+            response += f"📅 **Plan**: {active_membership.plan.name}\n"
+            response += f"⏳ **Days Remaining**: {days_remaining} days\n"
+            response += f"🔄 **Expires**: {active_membership.end_date.strftime('%B %d, %Y')}\n"
+            response += f"📍 **Started**: {active_membership.start_date.strftime('%B %d, %Y')}\n"
+        else:
+            response += f"❌ **Status**: No Active Membership\n"
+
+        response += f"\n"
+
+        # Payment History
+        response += "💰 **Recent Payments**\n"
+        recent_payments = Payment.objects.filter(
+            user=member
+        ).order_by('-payment_date')[:5]
+
+        if recent_payments.exists():
+            for payment in recent_payments:
+                status_emoji = "✅" if payment.status == 'confirmed' else "⏳" if payment.status == 'pending' else "❌"
+                response += f"{status_emoji} {payment.payment_date.strftime('%b %d, %Y')} - ₱{payment.amount:.2f} ({payment.get_method_display()}) - {payment.get_status_display()}\n"
+        else:
+            response += "No payment records found.\n"
+
+        response += f"\n"
+
+        # Account Information
+        response += "⚙️ **Account Information**\n"
+        response += f"• **Member Since**: {member.date_joined.strftime('%B %d, %Y')}\n"
+        response += f"• **Account Status**: {'Active' if member.is_active else 'Inactive'}\n"
+
+        if member.kiosk_pin:
+            response += f"• **Kiosk PIN**: `{member.kiosk_pin}`\n"
+        else:
+            response += f"• **Kiosk PIN**: Not assigned (Generate with 'generate pin for {member.first_name}')\n"
+
+        response += f"\n"
+
+        # Staff Actions
+        response += "🔗 **Staff Actions**\n"
+        response += f"• View [Member Profile](/admin/gym_app/user/{member.id}/change/) - Full profile edit\n"
+        response += f"• Check [Pending Payments](/pending-payments/) - Process any payments\n"
+        response += f"• View [Attendance](/attendance/?member={member.id}) - Check-in/out history\n"
+
+        return response
